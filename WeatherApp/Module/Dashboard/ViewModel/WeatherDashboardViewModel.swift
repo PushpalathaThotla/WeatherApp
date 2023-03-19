@@ -16,6 +16,7 @@ class WeatherDashboardViewModel: ObservableObject {
     }
     
     enum State {
+        case none
         case loading
         case ready
         case error(_ messgae: String)
@@ -26,7 +27,7 @@ class WeatherDashboardViewModel: ObservableObject {
     private let dataManager: WeatherDashboardDataManaging
     private var params: [String : String] = ["appid" : "e9b75aa00c3ce6bf64482d4ef18f1096", "units":"metric"]
     
-    @Published var viewState: State = .loading
+    @Published var viewState: State = .none
     
     required init(dataManager: WeatherDashboardDataManaging, cache: Caching) {
         self.cache = cache
@@ -60,6 +61,9 @@ extension WeatherDashboardViewModel {
                 self.fetchWeather(coord: coord)
             } else {
                 self.viewState = .ready
+                if let error = error {
+                    self.viewState = .error(error.localizedDescription)
+                }
             }
         }
     }
@@ -191,4 +195,7 @@ extension WeatherDashboardViewModel {
         return nil
     }
 
+    var hasWeatherData: Bool {
+        return (dataSource != nil)
+    }
 }

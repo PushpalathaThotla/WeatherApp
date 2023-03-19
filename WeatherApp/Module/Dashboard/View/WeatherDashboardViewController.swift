@@ -11,10 +11,7 @@ import Combine
 import CoreLocation
 
 class WeatherDashboardViewController: UIViewController  {
-    
-    private let locationManager = CLLocationManager()
-    
-    private var viewModel: WeatherDashboardViewModel
+    // IBOutlets
     @IBOutlet var searchBar: UISearchBar!
     @IBOutlet var weatherImageView: UIImageView!
     @IBOutlet var placeLabel: UILabel!
@@ -22,26 +19,16 @@ class WeatherDashboardViewController: UIViewController  {
     @IBOutlet var currentTemparatureDescriptionLabel: UILabel!
     @IBOutlet var highTemparatureLabel: UILabel!
     @IBOutlet var lowTemparatureLabel: UILabel!
-    
     @IBOutlet var windSpeedTitleLabel: UILabel!
     @IBOutlet var windSpeedValueLabel: UILabel!
-    
     @IBOutlet var humidityTitleLabel: UILabel!
     @IBOutlet var humidityValueLabel: UILabel!
-    
     @IBOutlet var feelsLikeTitleLabel: UILabel!
     @IBOutlet var feelsLikeValueLabel: UILabel!
     
-    init?(_ viewModel: WeatherDashboardViewModel, coder: NSCoder) {
-        self.viewModel = viewModel
-        super.init(coder: coder)
-    }
-    
-    @available(*, unavailable, renamed: "init(viewModel:coder:)")
-    required init?(coder: NSCoder) {
-        fatalError("Invalid way of decoding this class")
-    }
-    
+    private let locationManager = CLLocationManager()
+    private var viewModel: WeatherDashboardViewModel
+
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
         indicator.color = .red
@@ -51,6 +38,16 @@ class WeatherDashboardViewController: UIViewController  {
         view.addSubview(indicator)
         return indicator
     }()
+
+    init?(_ viewModel: WeatherDashboardViewModel, coder: NSCoder) {
+        self.viewModel = viewModel
+        super.init(coder: coder)
+    }
+    
+    @available(*, unavailable, renamed: "init(viewModel:coder:)")
+    required init?(coder: NSCoder) {
+        fatalError("Invalid way of decoding this class")
+    }
     
     private var cancellables: Set = Set<AnyCancellable>()
     private var searchWorkItem: DispatchWorkItem?
@@ -64,14 +61,19 @@ class WeatherDashboardViewController: UIViewController  {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = viewModel.title
-        configureLocation()
         addObservers()
-        var searchkey = "Chicago"
-        if viewModel.lastSearch().valid {
-            searchkey = viewModel.lastSearch().location ?? ""
-        }
-        performSearch(text: searchkey)
         
+        // if we have last search text , then start weather search with the last search text
+        if viewModel.lastSearch().valid {
+            if let  searchkey = viewModel.lastSearch().location {
+                performSearch(text: searchkey)
+            }
+        } else {
+            /* Else its first time the app is opened so call the location services
+             and search for the current latitude and longitude values ,
+             if the user provides the permission */
+            configureLocation()
+        }
     }
     
     private func addObservers() {
@@ -80,6 +82,8 @@ class WeatherDashboardViewController: UIViewController  {
             .sink { [weak self] state  in
                 guard let self = self else { return }
                 switch state {
+                case .none:
+                    self.activityIndicator.stopAnimating()
                 case .loading:
                     self.activityIndicator.startAnimating()
                 case .ready:
@@ -88,8 +92,9 @@ class WeatherDashboardViewController: UIViewController  {
                 case .error(let message):
                     self.activityIndicator.stopAnimating()
                     print("Error with \(message)")
-                    //                    let controller = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
-                    //                    self.present(controller, animated: true)
+                    let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+                    self.present(alert, animated: true)
+                    alert.addAction(UIAlertAction(title: "Dismiss", style: .cancel))
                 }
             }
             .store(in: &cancellables)
@@ -100,32 +105,30 @@ class WeatherDashboardViewController: UIViewController  {
         print("Performing search...")
         Task {
             viewModel.fetchWeather(for: text)
-            //            do {
-            //                try await viewModel.fetchWeather(for: text)
-            //            } catch (let error) {
-            //                print("Weather Error with \(error)")
-            //                viewModel.viewState = .error(error.localizedDescription)
-            //            }
         }
     }
     
     private func updateUI() {
+        // update the UI only if the data is available
+        if viewModel.hasWeatherData == false { return }
+        
         placeLabel.text = viewModel.place
         currentTemparatureLabel.attributedText = viewModel.temperature
         currentTemparatureDescriptionLabel.text = viewModel.temperatureDescription
         highTemparatureLabel.attributedText = viewModel.temperatureMax
         lowTemparatureLabel.attributedText = viewModel.tempratureMin
-        if let url  = viewModel.weatherImageURL {
-            weatherImageView.load(url: url)
-        } else {
-            weatherImageView.image = nil
-        }
         windSpeedTitleLabel.text = viewModel.windSpeedTitle
         windSpeedValueLabel.text = viewModel.windSpeed
         humidityTitleLabel.text = viewModel.humidityTitle
         humidityValueLabel.text = viewModel.humidity
         feelsLikeTitleLabel.text = viewModel.feelsLikeTitle
         feelsLikeValueLabel.attributedText = viewModel.feelsLike
+        
+        // Image is caching is applied here .
+        weatherImageView.image = nil
+        if let url  = viewModel.weatherImageURL {
+            weatherImageView.load(url: url)
+        }
     }
 }
 
@@ -133,6 +136,7 @@ extension WeatherDashboardViewController: UISearchBarDelegate {
     
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         searchWorkItem?.cancel()
+        //  encapsulates work to be performed on a dispatch queue
         searchWorkItem = DispatchWorkItem { [weak self] in
             self?.performSearch(text: searchText)
         }
@@ -143,7 +147,7 @@ extension WeatherDashboardViewController: UISearchBarDelegate {
 
 
 extension WeatherDashboardViewController: CLLocationManagerDelegate {
-    
+    // Invoked when the authorization status changes for this application
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         if status == .authorizedWhenInUse {
             locationManager.startUpdatingLocation()
@@ -151,15 +155,13 @@ extension WeatherDashboardViewController: CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        
+        guard let location = locations.first else { return }
+    
         let latitude = location.coordinate.latitude
         let longitude = location.coordinate.longitude
-        
         print("Latitude: \(latitude), Longitude: \(longitude)")
-        
         locationManager.stopUpdatingLocation()
-        
+        // perform search based on current location.
         Task {
             try await viewModel.fetchWeatherFor(latitude: latitude, longitude: longitude)
         }
