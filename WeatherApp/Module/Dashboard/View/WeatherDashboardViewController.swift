@@ -77,6 +77,7 @@ class WeatherDashboardViewController: UIViewController  {
     }
     
     private func addObservers() {
+        // Handles the loading indicator
         viewModel.$viewState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state  in
@@ -91,6 +92,7 @@ class WeatherDashboardViewController: UIViewController  {
                     self.updateUI()
                 case .error(let message):
                     self.activityIndicator.stopAnimating()
+                    // When the location enter is failed to validate 
                     print("Error with \(message)")
                     let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
                     self.present(alert, animated: true)

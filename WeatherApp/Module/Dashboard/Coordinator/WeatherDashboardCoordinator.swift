@@ -18,8 +18,8 @@ final public class WeatherCoordinator: Coordinator {
         self.networkManager = networkManager
     }
     
+    // load the story board
     public func start() {
-        
         let storyboard = UIStoryboard(name: "WeatherDashboardViewController", bundle: nil)
         let controller = storyboard.instantiateViewController(
             identifier: "WeatherDashboardViewController",

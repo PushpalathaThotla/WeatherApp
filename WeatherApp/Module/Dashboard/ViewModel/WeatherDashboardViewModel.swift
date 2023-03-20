@@ -81,7 +81,6 @@ extension WeatherDashboardViewModel {
         dataSource = try await dataManager.fetchWeatherData(with: params)
         viewState = .ready
     }
-
 }
 
 extension WeatherDashboardViewModel {
@@ -124,16 +123,12 @@ extension WeatherDashboardViewModel {
     }
     
     var temperature: NSMutableAttributedString? {
-        
         if let found = dataSource?.main?.temp {
-            
             let attrString = NSMutableAttributedString(string: getTempFor(found),
                                                                      attributes: [NSAttributedString.Key.font: UIFont.systemFont(ofSize: 36)])
-
             attrString.append(NSMutableAttributedString(string:"°",
                                                                 attributes: [NSAttributedString.Key.font: UIFont.systemFont(ofSize: 18),.baselineOffset: NSNumber(value: 18)]))
             return attrString
-
         }
         return nil
     }

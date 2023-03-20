@@ -22,27 +22,17 @@ class MockNetworkManager: NetworkManaging {
         return URL(string: "https://openweathermap.org/img/wn/10d@2x.png")
     }
     
-    
     func execute<T>(url: String, params: RequestParameters?) async throws -> T where T : Decodable {
         let model: T = try await withCheckedThrowingContinuation( { continuation in
-            guard let url = Bundle.current.url(forResource: url, withExtension: "json") else {
-                continuation.resume(throwing: Failure.badUrl)
-                return
-            }
-            let request = URLRequest(url: url)
-            Task {
-                do {
-                    let (data, _) = try await URLSession.shared.data(for: request, delegate: nil)
-                    guard let decodedResponse = try? JSONDecoder().decode(T.self, from: data) else {
-                        continuation.resume(throwing: Failure.parsingError)
-                        return
-                    }
-                    print("Response from asyn await \(decodedResponse)")
-                    continuation.resume(returning: decodedResponse)
-                } catch {
-                    continuation.resume(throwing: Failure.badResponse("error?.localizedDescription"))
+            let decoder = JSONDecoder()
+                guard let url = Bundle.main.url(forResource: "WeatherDashboard", withExtension: "json"),
+                   let data = try? Data(contentsOf: url),
+                      let decodedResponse = try? decoder.decode(T.self, from: data) else {
+                    continuation.resume(throwing: Failure.parsingError)
+                    return
                 }
-            }
+                print("Response from asyn await \(decodedResponse)")
+                continuation.resume(returning: decodedResponse)
         })
         return model
     }
@@ -63,7 +53,6 @@ class MockWeatherDataManager: WeatherDashboardDataManaging {
     func getWeatherIconURL(for icon: String) -> URL? {
         networkManager.getWeatherIconURL(for: icon)
     }
-
 }
 
 class MockCache: Caching {
@@ -76,17 +65,27 @@ final class WeatherDashboardViewModelTests: XCTestCase {
     var viewModel: WeatherDashboardViewModel!
 
     override func setUpWithError() throws {
-        
         let dataManager = MockWeatherDataManager(MockNetworkManager())
         viewModel = WeatherDashboardViewModel(dataManager: dataManager, cache: MockCache())
-        // Put setup code here. This method is called before the invocation of each test method in the class.
+        Task {
+            try await viewModel.fetchWeatherFor(latitude: 37.90145, longitude: -122.061776)
+        }
     }
 
     override func tearDownWithError() throws {
         viewModel = nil
     }
     
-    func testTitle() {
-        XCTAssertEqual(viewModel.title, "Weather")
+    func testViewData() {
+        // fetchWeatherFor async call , this test is called before the JSON data response parsing. Just adding delay
+        let  searchWorkItem = DispatchWorkItem {
+            print("testTitle")
+            XCTAssertEqual(self.viewModel.title, "Weather")
+            XCTAssertEqual(self.viewModel.hasWeatherData, true)
+            XCTAssertEqual(self.viewModel.place, "Chicago")
+            XCTAssertEqual(self.viewModel.place, "light rain")
+            XCTAssertEqual(self.viewModel.weatherImageURL,URL(string:"https://openweathermap.org/img/wn/10d@2x.png"))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: searchWorkItem)
     }
 }
